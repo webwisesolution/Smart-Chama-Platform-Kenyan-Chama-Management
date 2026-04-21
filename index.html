@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Smart Chama Platform | Kenyan Chama Management</title>
+    <!-- Tailwind CSS + Font Awesome + Chart.js -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        .toast-notify { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 12px 20px -10px rgba(0,0,0,0.1); }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #10b981; border-radius: 10px; }
+        button:active { transform: scale(0.98); }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+<div class="max-w-7xl mx-auto px-4 py-6 md:px-6">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6">
+        <div>
+            <h1 class="text-3xl font-extrabold bg-gradient-to-r from-emerald-700 to-teal-600 bg-clip-text text-transparent">
+                <i class="fas fa-handshake mr-2 text-emerald-700"></i>Smart Chama Platform
+            </h1>
+            <p class="text-gray-500 text-sm">Contributions • Loans • M-Pesa STK • Reports • SMS</p>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+            <div class="bg-white px-3 py-2 rounded-full shadow text-xs"><i class="fas fa-users"></i> <span id="memberCount">0</span> Members</div>
+            <div class="bg-white px-3 py-2 rounded-full shadow text-xs"><i class="fas fa-coins"></i> <span id="totalRaised">KES 0</span> raised</div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex flex-wrap gap-2 border-b pb-2 mb-6">
+        <button data-tab="dashboard" class="tab-btn px-5 py-2 rounded-full transition text-sm font-medium bg-emerald-600 text-white shadow"><i class="fas fa-chart-pie mr-1"></i> Dashboard</button>
+        <button data-tab="contributions" class="tab-btn px-5 py-2 rounded-full transition text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"><i class="fas fa-wallet mr-1"></i> Contributions</button>
+        <button data-tab="loans" class="tab-btn px-5 py-2 rounded-full transition text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"><i class="fas fa-hand-holding-usd mr-1"></i> Loans + Interest</button>
+        <button data-tab="mpesa" class="tab-btn px-5 py-2 rounded-full transition text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"><i class="fas fa-mobile-alt mr-1"></i> M-Pesa & SMS</button>
+        <button data-tab="reports" class="tab-btn px-5 py-2 rounded-full transition text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"><i class="fas fa-file-invoice mr-1"></i> Reports</button>
+    </div>
+
+    <!-- Dynamic Content Panels -->
+    <div id="dashboardPanel" class="tab-panel"></div>
+    <div id="contributionsPanel" class="tab-panel hidden"></div>
+    <div id="loansPanel" class="tab-panel hidden"></div>
+    <div id="mpesaPanel" class="tab-panel hidden"></div>
+    <div id="reportsPanel" class="tab-panel hidden"></div>
+    
+    <div class="text-center text-xs text-gray-400 pt-8 border-t mt-8">Smart Chama Management — Full M-Pesa STK Simulation & Interest Calculation. Built for Kenyan Chamas.</div>
+</div>
+
+<script>
+    // ---------- DATA ----------
+    let members = [
+        { id: 'm1', name: 'Grace Wanjiku', phone: '+254712345678', email: 'grace@chama.com' },
+        { id: 'm2', name: 'James Otieno', phone: '+254722334455', email: 'james@chama.com' },
+        { id: 'm3', name: 'Mary Muthoni', phone: '+254733445566', email: 'mary@chama.com' },
+        { id: 'm4', name: 'Peter Kimani', phone: '+254744556677', email: 'peter@chama.com' }
+    ];
+    
+    let contributions = [
+        { id: 'c1', memberId: 'm1', amount: 5000, date: '2025-03-01', method: 'Cash', notes: 'Monthly' },
+        { id: 'c2', memberId: 'm2', amount: 5000, date: '2025-03-02', method: 'M-Pesa', notes: '' },
+        { id: 'c3', memberId: 'm3', amount: 5000, date: '2025-03-03', method: 'Bank', notes: '' },
+        { id: 'c4', memberId: 'm1', amount: 5000, date: '2025-02-01', method: 'M-Pesa', notes: '' },
+        { id: 'c5', memberId: 'm4', amount: 5000, date: '2025-03-04', method: 'Cash', notes: '' }
+    ];
+    
+    let loans = [
+        { id: 'l1', memberId: 'm1', principal: 20000, interestRate: 10, termMonths: 3, issueDate: '2025-01-10', dueDate: '2025-04-10', remainingBalance: 12000, totalDue: 26000, status: 'active', paidAmount: 14000 },
+        { id: 'l2', memberId: 'm3', principal: 15000, interestRate: 12, termMonths: 2, issueDate: '2025-02-15', dueDate: '2025-04-15', remainingBalance: 15000, totalDue: 18600, status: 'active', paidAmount: 0 }
+    ];
+    
+    let chartInstance = null;
+    
+    // Helper functions
+    function formatKES(amount) {
+        return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount);
+    }
+    
+    function generateId() {
+        return Date.now() + '-' + Math.random().toString(36).substr(2, 8);
+    }
+    
+    function showToast(message, type = 'success') {
+        let container = document.getElementById('toastContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toastContainer';
+            container.className = 'fixed bottom-5 right-5 z-50 space-y-2';
+            document.body.appendChild(container);
+        }
+        const toast = document.createElement('div');
+        toast.className = `toast-notify bg-white shadow-xl rounded-lg px-5 py-3 flex items-center gap-3 border-l-4 ${type === 'success' ? 'border-green-500' : 'border-blue-500'} text-gray-800 text-sm font-medium`;
+        toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle text-green-500' : 'fa-info-circle text-blue-500'}"></i><span>${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 3500);
+    }
+    
+    function simulateMpesaStk(phone, amount, purpose, onSuccess) {
+        let cleanPhone = phone.replace(/\s/g, '').replace(/^0/, '+254');
+        if (!cleanPhone.startsWith('+254')) cleanPhone = '+254' + cleanPhone.slice(-9);
+        showToast(`📱 STK Push simulation: sending to ${cleanPhone} for ${formatKES(amount)} (${purpose})...`, 'info');
+        setTimeout(() => {
+            showToast(`✅ M-Pesa payment of ${formatKES(amount)} successful for ${purpose}!`, 'success');
+            if (onSuccess) onSuccess();
+        }, 1200);
+    }
+    
+    function sendSmsReminder(phone, name, type) {
+        let msg = `Dear ${name}, `;
+        if (type === 'contribution') msg += `your monthly Chama contribution of KES 5,000 is due. Please pay via M-Pesa.`;
+        else if (type === 'loan') msg += `your loan repayment is overdue. Kindly clear your balance.`;
+        else msg += `please log in to the Chama portal.`;
+        showToast(`📲 SMS reminder sent to ${phone}: "${msg.substring(0, 60)}..."`, 'success');
+    }
+    
+    // Core business logic
+    function getTotalContributions() {
+        return contributions.reduce((sum, c) => sum + c.amount, 0);
+    }
+    
+    function getTotalActiveLoans() {
+        return loans.filter(l => l.status === 'active').reduce((sum, l) => sum + l.remainingBalance, 0);
+    }
+    
+    function getTotalInterestEarned() {
+        return loans.reduce((sum, l) => sum + (l.totalDue - l.principal), 0);
+    }
+    
+    function addContribution(memberId, amount, date, method) {
+        if (!memberId || amount <= 0) { showToast('Invalid contribution data', 'info'); return false; }
+        const newCont = {
+            id: generateId(),
+            memberId,
+            amount: parseFloat(amount),
+            date: date || new Date().toISOString().split('T')[0],
+            method: method || 'Manual',
+            notes: ''
+        };
+        contributions.push(newCont);
+        showToast(`✅ ${formatKES(amount)} contribution recorded`, 'success');
+        renderAll(); // refresh UI
+        return true;
+    }
+    
+    function createLoan(memberId, principal, interestRate, termMonths) {
+        if (!memberId || principal <= 0 || interestRate <= 0 || termMonths <= 0) {
+            showToast('Please fill all loan fields with positive numbers', 'info');
+            return false;
+        }
+        const p = parseFloat(principal);
+        const rate = parseFloat(interestRate);
+        const months = parseInt(termMonths);
+        const interestAmount = p * (rate / 100) * months;
+        const totalDue = p + interestAmount;
+        const issueDate = new Date().toISOString().split('T')[0];
+        const dueDateObj = new Date();
+        dueDateObj.setMonth(dueDateObj.getMonth() + months);
+        const newLoan = {
+            id: generateId(),
+            memberId,
+            principal: p,
+            interestRate: rate,
+            termMonths: months,
+            issueDate,
+            dueDate: dueDateObj.toISOString().split('T')[0],
+            remainingBalance: totalDue,
+            totalDue,
+            status: 'active',
+            paidAmount: 0
+        };
+        loans.push(newLoan);
+        showToast(`🏦 Loan of ${formatKES(p)} issued with interest ${formatKES(interestAmount)}`, 'success');
+        renderAll();
+        return true;
+    }
+    
+    function repayLoan(loanId, amount, useMpesa = false, memberPhone = '') {
+        const loan = loans.find(l => l.id === loanId);
+        if (!loan || loan.status !== 'active') { showToast('Loan not active', 'info'); return; }
+        let repayAmount = Math.min(amount, loan.remainingBalance);
+        if (repayAmount <= 0) { showToast('Enter a valid positive amount', 'info'); return; }
+        
+        const doRepay = () => {
+            loan.remainingBalance -= repayAmount;
+            loan.paidAmount = (loan.paidAmount || 0) + repayAmount;
+            if (loan.remainingBalance <= 0) loan.status = 'repaid';
+            showToast(`💸 Repayment of ${formatKES(repayAmount)} recorded. Remaining: ${formatKES(loan.remainingBalance)}`, 'success');
+            renderAll();
+        };
+        
+        if (useMpesa && memberPhone) {
+            simulateMpesaStk(memberPhone, repayAmount, 'Loan Repayment', doRepay);
+        } else {
+            doRepay();
+        }
+    }
+    
+    // ---------- RENDER FUNCTIONS (Vanilla JS) ----------
+    function renderDashboard() {
+        const container = document.getElementById('dashboardPanel');
+        const memberCount = members.length;
+        const totalCont = getTotalContributions();
+        const totalLoans = getTotalActiveLoans();
+        const totalInterest = getTotalInterestEarned();
+        container.innerHTML = `
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div class="bg-white rounded-2xl p-5 shadow card-hover"><i class="fas fa-users text-3xl text-emerald-500"></i><h3 class="text-2xl font-bold mt-2">${memberCount}</h3><p>Active Members</p></div>
+                <div class="bg-white rounded-2xl p-5 shadow"><i class="fas fa-coins text-3xl text-emerald-500"></i><h3 class="text-2xl font-bold">${formatKES(totalCont)}</h3><p>Total Contributions</p><button data-nav="contributions" class="nav-link text-xs text-emerald-600 mt-2">View →</button></div>
+                <div class="bg-white rounded-2xl p-5 shadow"><i class="fas fa-chart-line text-3xl text-amber-500"></i><h3 class="text-2xl font-bold">${formatKES(totalLoans)}</h3><p>Outstanding Loans</p><button data-nav="loans" class="nav-link text-xs text-amber-600 mt-2">Manage →</button></div>
+                <div class="bg-white rounded-2xl p-5 shadow"><i class="fas fa-percent text-3xl text-indigo-500"></i><h3 class="text-2xl font-bold">${formatKES(totalInterest)}</h3><p>Interest Earned</p></div>
+            </div>
+        `;
+        attachNavLinks();
+    }
+    
+    function renderContributions() {
+        const container = document.getElementById('contributionsPanel');
+        let memberOptions = members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+        let contributionsHtml = contributions.map(c => {
+            const member = members.find(m => m.id === c.memberId);
+            return `<tr class="border-b"><td class="px-4 py-2">${member?.name || '?'}</td><td class="font-semibold">${formatKES(c.amount)}</td><td>${c.date}</td><td>${c.method}</td><td>${!c.method.includes('STK') ? `<button data-contrib-mpesa="${c.memberId}|${c.amount}" class="mpesa-contrib-btn text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full"><i class="fas fa-mobile-alt"></i> Simulate STK</button>` : '—'}</td></tr>`;
+        }).join('');
+        container.innerHTML = `
+            <div class="space-y-6">
+                <div class="bg-white rounded-2xl shadow-sm p-5 border">
+                    <h3 class="text-xl font-bold flex gap-2"><i class="fas fa-coins text-emerald-600"></i> Record Contribution</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+                        <select id="contribMember" class="border rounded-xl p-2"><option value="">Select Member</option>${memberOptions}</select>
+                        <input type="number" id="contribAmount" placeholder="Amount (KES)" class="border rounded-xl p-2">
+                        <input type="date" id="contribDate" value="${new Date().toISOString().split('T')[0]}" class="border rounded-xl p-2">
+                        <select id="contribMethod" class="border rounded-xl p-2"><option>M-Pesa</option><option>Cash</option><option>Bank</option></select>
+                        <button id="addContribBtn" class="bg-emerald-600 text-white px-5 py-2 rounded-xl hover:bg-emerald-700"><i class="fas fa-plus"></i> Add Contribution</button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl shadow overflow-x-auto">
+                    <table class="min-w-full divide-y"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left">Member</th><th>Amount</th><th>Date</th><th>Method</th><th>M-Pesa STK</th></tr></thead><tbody>${contributionsHtml}</tbody></table>
+                </div>
+            </div>
+        `;
+        document.getElementById('addContribBtn').addEventListener('click', () => {
+            const memberId = document.getElementById('contribMember').value;
+            const amount = parseFloat(document.getElementById('contribAmount').value);
+            const date = document.getElementById('contribDate').value;
+            const method = document.getElementById('contribMethod').value;
+            if (memberId && amount > 0) addContribution(memberId, amount, date, method);
+            else showToast('Select member and valid amount', 'info');
+        });
+        document.querySelectorAll('.mpesa-contrib-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const [memberId, amount] = btn.getAttribute('data-contrib-mpesa').split('|');
+                const member = members.find(m => m.id === memberId);
+                if (member) simulateMpesaStk(member.phone, parseFloat(amount), 'Contribution', () => addContribution(memberId, amount, new Date().toISOString().split('T')[0], 'M-Pesa (STK)'));
+            });
+        });
+    }
+    
+    function renderLoans() {
+        const container = document.getElementById('loansPanel');
+        let memberOptions = members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+        let loansHtml = loans.map(loan => {
+            const member = members.find(m => m.id === loan.memberId);
+            return `<tr class="border-b"><td class="px-4 py-3">${member?.name}</td><td>${formatKES(loan.principal)}</td><td>${formatKES(loan.totalDue)} <span class="text-xs text-gray-500">(+${formatKES(loan.totalDue-loan.principal)} int)</span></td><td class="font-bold">${formatKES(loan.remainingBalance)}</td><td><span class="px-2 py-1 rounded-full text-xs ${loan.status==='active'?'bg-yellow-100 text-yellow-700':'bg-green-100'}">${loan.status}</span></td>
+            <td class="flex gap-2 flex-wrap">${loan.status === 'active' ? `<button data-loan-repay="${loan.id}|5000|1|${member?.phone}" class="mpesa-repay-btn bg-blue-600 text-white text-xs px-3 py-1 rounded-lg"><i class="fas fa-mobile-alt"></i> Pay 5k M-Pesa</button>
+            <input type="number" placeholder="Amount" id="repay_input_${loan.id}" class="w-24 border rounded text-sm p-1">
+            <button data-loan-manual="${loan.id}" class="manual-repay-btn bg-gray-600 text-white text-xs px-2 py-1 rounded">Manual</button>` : ''}
+            <button data-sms-loan="${loan.id}" class="sms-loan-btn text-purple-600 text-xs underline"><i class="fas fa-sms"></i> SMS</button>
+            </td></tr>`;
+        }).join('');
+        container.innerHTML = `
+            <div class="space-y-6">
+                <div class="bg-white rounded-2xl p-5 shadow-sm">
+                    <h3 class="text-xl font-bold"><i class="fas fa-hand-holding-usd text-amber-600"></i> Apply New Loan (Simple Interest)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
+                        <select id="loanMember" class="border p-2 rounded-xl"><option value="">Member</option>${memberOptions}</select>
+                        <input type="number" id="loanPrincipal" placeholder="Principal (KES)" class="border p-2 rounded-xl">
+                        <input type="number" id="loanRate" placeholder="Rate %/month" value="10" class="border p-2 rounded-xl">
+                        <input type="number" id="loanTerm" placeholder="Term (months)" value="3" class="border p-2 rounded-xl">
+                        <button id="createLoanBtn" class="bg-amber-600 text-white rounded-xl px-4 py-2"><i class="fas fa-calculator"></i> Issue Loan</button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl shadow overflow-x-auto">
+                    <table class="min-w-full"><thead class="bg-gray-50"><tr><th>Member</th><th>Principal</th><th>Total Due</th><th>Remaining</th><th>Status</th><th>Actions</th></tr></thead><tbody>${loansHtml}</tbody></table>
+                </div>
+            </div>
+        `;
+        document.getElementById('createLoanBtn').addEventListener('click', () => {
+            const memberId = document.getElementById('loanMember').value;
+            const principal = parseFloat(document.getElementById('loanPrincipal').value);
+            const rate = parseFloat(document.getElementById('loanRate').value);
+            const term = parseInt(document.getElementById('loanTerm').value);
+            createLoan(memberId, principal, rate, term);
+        });
+        document.querySelectorAll('.mpesa-repay-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const [loanId, amount, , phone] = btn.getAttribute('data-loan-repay').split('|');
+                repayLoan(loanId, parseFloat(amount), true, phone);
+            });
+        });
+        document.querySelectorAll('.manual-repay-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const loanId = btn.getAttribute('data-loan-manual');
+                const input = document.getElementById(`repay_input_${loanId}`);
+                const amount = parseFloat(input.value);
+                if (amount > 0) repayLoan(loanId, amount, false);
+                else showToast('Enter valid amount', 'info');
+            });
+        });
+        document.querySelectorAll('.sms-loan-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const loanId = btn.getAttribute('data-sms-loan');
+                const loan = loans.find(l => l.id === loanId);
+                const member = members.find(m => m.id === loan.memberId);
+                if (member) sendSmsReminder(member.phone, member.name, 'loan');
+            });
+        });
+    }
+    
+    function renderMpesaSms() {
+        const container = document.getElementById('mpesaPanel');
+        let membersHtml = members.map(m => `
+            <div class="border rounded-xl p-3 flex justify-between items-center">
+                <div><p class="font-semibold">${m.name}</p><p class="text-xs text-gray-500">${m.phone}</p></div>
+                <div class="flex gap-2">
+                    <button data-sms="${m.id}" class="sms-reminder-btn bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm"><i class="fas fa-sms"></i> Remind</button>
+                    <button data-mpesa="${m.id}|5000" class="quick-pay-btn bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm"><i class="fas fa-money-bill-wave"></i> Pay 5k</button>
+                </div>
+            </div>
+        `).join('');
+        container.innerHTML = `
+            <div class="space-y-6">
+                <div class="bg-white rounded-2xl p-5 shadow-sm">
+                    <h3 class="font-bold text-lg"><i class="fas fa-users"></i> Members & Quick Actions</h3>
+                    <div class="grid md:grid-cols-2 gap-4 mt-3">${membersHtml}</div>
+                </div>
+                <div class="bg-blue-50 p-5 rounded-2xl">
+                    <button id="bulkSmsBtn" class="bg-indigo-600 text-white px-5 py-2 rounded-xl text-sm">📢 Bulk SMS Reminder (Simulated)</button>
+                </div>
+                <div class="bg-white rounded-xl p-5 border">
+                    <h3 class="font-bold"><i class="fas fa-phone-alt"></i> M-Pesa STK Simulator</h3>
+                    <div class="flex flex-wrap gap-3 mt-2">
+                        <input type="text" id="stkPhone" placeholder="Phone e.g 0712345678" class="border rounded-lg p-2 flex-1" value="0712345678">
+                        <input type="number" id="stkAmount" placeholder="Amount" class="border rounded-lg p-2 w-32" value="1000">
+                        <button id="stkSimulateBtn" class="bg-emerald-500 text-white px-4 rounded-lg">Simulate STK Push</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.querySelectorAll('.sms-reminder-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const memberId = btn.getAttribute('data-sms');
+                const member = members.find(m => m.id === memberId);
+                if (member) sendSmsReminder(member.phone, member.name, 'contribution');
+            });
+        });
+        document.querySelectorAll('.quick-pay-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const [memberId, amount] = btn.getAttribute('data-mpesa').split('|');
+                const member = members.find(m => m.id === memberId);
+                if (member) simulateMpesaStk(member.phone, parseFloat(amount), 'Contribution', () => addContribution(memberId, amount, new Date().toISOString().split('T')[0], 'M-Pesa (STK)'));
+            });
+        });
+        document.getElementById('bulkSmsBtn').addEventListener('click', () => {
+            members.forEach(m => sendSmsReminder(m.phone, m.name, 'contribution'));
+        });
+        document.getElementById('stkSimulateBtn').addEventListener('click', () => {
+            const phone = document.getElementById('stkPhone').value;
+            const amount = parseFloat(document.getElementById('stkAmount').value);
+            if (amount > 0) simulateMpesaStk(phone, amount, 'Chama Payment', () => showToast(`Demo STK success: ${formatKES(amount)}`));
+            else showToast('Enter valid amount', 'info');
+        });
+    }
+    
+    function renderReports() {
+        const container = document.getElementById('reportsPanel');
+        const totalCont = getTotalContributions();
+        const totalLoans = getTotalActiveLoans();
+        const totalInterest = getTotalInterestEarned();
+        container.innerHTML = `
+            <div class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white p-5 rounded-2xl shadow border-l-8 border-emerald-500"><p class="text-gray-500">Total Contributions</p><p class="text-3xl font-bold">${formatKES(totalCont)}</p></div>
+                    <div class="bg-white p-5 rounded-2xl shadow border-l-8 border-amber-500"><p class="text-gray-500">Active Loan Portfolio</p><p class="text-3xl font-bold">${formatKES(totalLoans)}</p></div>
+                    <div class="bg-white p-5 rounded-2xl shadow border-l-8 border-indigo-500"><p class="text-gray-500">Interest Earned</p><p class="text-3xl font-bold">${formatKES(totalInterest)}</p></div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow"><h3 class="font-bold mb-3">Member Contributions vs Loan Balances</h3><canvas id="reportChart" height="250"></canvas></div>
+            </div>
+        `;
+        // Chart rendering
+        const ctx = document.getElementById('reportChart').getContext('2d');
+        if (chartInstance) chartInstance.destroy();
+        const memberNames = members.map(m => m.name.split(' ')[0]);
+        const contribPerMember = members.map(m => contributions.filter(c => c.memberId === m.id).reduce((s,c)=>s+c.amount,0));
+        const loanBalances = members.map(m => loans.filter(l=>l.memberId===m.id && l.status==='active').reduce((s,l)=>s+l.remainingBalance,0));
+        chartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: { labels: memberNames, datasets: [
+                { label: 'Total Contributions (KES)', data: contribPerMember, backgroundColor: '#10b981', borderRadius: 8 },
+                { label: 'Active Loan Balance (KES)', data: loanBalances, backgroundColor: '#f59e0b', borderRadius: 8 }
+            ]},
+            options: { responsive: true, maintainAspectRatio: true }
+        });
+    }
+    
+    function updateHeaderStats() {
+        document.getElementById('memberCount').innerText = members.length;
+        document.getElementById('totalRaised').innerHTML = formatKES(getTotalContributions());
+    }
+    
+    function attachNavLinks() {
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                const tab = link.getAttribute('data-nav');
+                if (tab) switchTab(tab);
+            });
+        });
+    }
+    
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.add('hidden'));
+        document.getElementById(`${tabId}Panel`).classList.remove('hidden');
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('bg-emerald-600', 'text-white', 'shadow');
+            btn.classList.add('bg-gray-100', 'text-gray-700');
+        });
+        const activeBtn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+        if (activeBtn) {
+            activeBtn.classList.remove('bg-gray-100', 'text-gray-700');
+            activeBtn.classList.add('bg-emerald-600', 'text-white', 'shadow');
+        }
+        if (tabId === 'reports') renderReports();
+    }
+    
+    function renderAll() {
+        updateHeaderStats();
+        renderDashboard();
+        renderContributions();
+        renderLoans();
+        renderMpesaSms();
+        // Only render reports if active tab is reports, but we'll re-render on demand
+        const activePanel = document.querySelector('.tab-panel:not(.hidden)');
+        if (activePanel && activePanel.id === 'reportsPanel') renderReports();
+    }
+    
+    // Initialize and event binding
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tab = btn.getAttribute('data-tab');
+            switchTab(tab);
+        });
+    });
+    
+    renderAll();
+    switchTab('dashboard');
+</script>
+</body>
+</html>
